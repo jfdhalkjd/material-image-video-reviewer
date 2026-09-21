@@ -8,7 +8,12 @@ const OPTIONAL = ['编号', '推广品类-AI', '追评文案-AI'];
 type Row = { id: string; fields: Record<string, unknown>; original: string; pending?: string[]; undo?: { before: string; after: string } };
 
 function text(v: unknown) { return Array.isArray(v) ? v.join('、') : v == null ? '' : String(v); }
-function urls(v: string) { return v.split(/[\n,，]+/).map(x => x.trim()).filter(Boolean); }
+function urls(v: string) {
+  // 飞书有时会把多个 URL 保存成 Markdown 链接：
+  // [url1,url2](url1,url2)。只提取真正的 http(s) URL，避免把括号和方括号当进图片地址。
+  const found = v.match(/https?:\/\/[^\s,\])，]+/g);
+  return (found ?? v.split(/[\n,，]+/)).map(x => x.trim()).filter(Boolean);
+}
 
 async function loadRows(): Promise<Row[]> {
   const table = await bitable.base.getActiveTable();
