@@ -13,9 +13,10 @@ function urls(v: string) { return v.split(/[\\n,，]+/).map(x => x.trim()).filte
 async function loadRows(): Promise<Row[]> {
   const table = await bitable.base.getActiveTable();
   const fields = await table.getFieldList();
-  const names = new Set(fields.map((f: any) => f.name));
+  const fieldMeta = await Promise.all(fields.map(async (f: any) => ({ id: f.id, name: await f.getName() })));
+  const names = new Set(fieldMeta.map((f: any) => f.name));
   if (!names.has(PHOTO)) throw new Error(`缺少必须字段：${PHOTO}`);
-  const byId = new Map(fields.map((f: any) => [f.name, f.id]));
+  const byId = new Map(fieldMeta.map((f: any) => [f.name, f.id]));
   const selection = await bitable.base.getSelection();
   const rows: Row[] = [];
   let pageToken: number | undefined = undefined;
