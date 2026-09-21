@@ -1,0 +1,5 @@
+node_modules/
+dist/
+*.ndjson
+*.manifest.json
+.DS_Store
