@@ -3,34 +3,35 @@ import { createRoot } from 'react-dom/client';
 import { bitable } from '@lark-base-open/js-sdk';
 import './style.css';
 
-const PHOTO = '朋友圈配图-AI';
-const OPTIONAL = ['编号', '推广品类-AI', '追评文案-AI'];
-type Row = { id: string; fields: Record<string, unknown>; original: string; pending?: string[]; undo?: { before: string; after: string } };
+const COVER = '扩展信息/封面';
+const SOURCE = '素材原始链接';
+const OPTIONAL = ['素材标题', '素材类型', '素材品类', '发布时间'];
+type Row = { id: string; fields: Record<string, unknown>; cover: string; source: string };
 
-function text(v: unknown) { return Array.isArray(v) ? v.join('、') : v == null ? '' : String(v); }
-function urls(v: string) {
-  // 飞书有时会把多个 URL 保存成 Markdown 链接：
-  // [url1,url2](url1,url2)。只提取真正的 http(s) URL，避免把括号和方括号当进图片地址。
-  const found = v.match(/https?:\/\/[^\s,\])，]+/g);
-  return (found ?? v.split(/[\n,，]+/)).map(x => x.trim()).filter(Boolean);
+function text(value: unknown) { return Array.isArray(value) ? value.join('、') : value == null ? '' : String(value); }
+function firstUrl(value: unknown) {
+  const raw = text(value);
+  const found = raw.match(/https?:\/\/[^\s,\])，]+/g);
+  return found?.[0] ?? raw.trim();
 }
 
 async function loadRows(): Promise<Row[]> {
   const table = await bitable.base.getActiveTable();
   const fields = await table.getFieldList();
-  const fieldMeta = await Promise.all(fields.map(async (f: any) => ({ id: f.id, name: await f.getName() })));
-  const names = new Set(fieldMeta.map((f: any) => f.name));
-  if (!names.has(PHOTO)) throw new Error(`缺少必须字段：${PHOTO}`);
-  const byId = new Map(fieldMeta.map((f: any) => [f.name, f.id]));
+  const metadata = await Promise.all(fields.map(async (field: any) => ({ id: field.id, name: await field.getName() })));
+  const names = new Set(metadata.map(field => field.name));
+  const missing = [COVER, SOURCE].filter(name => !names.has(name));
+  if (missing.length) throw new Error(`缺少必须字段：${missing.join('、')}`);
+  const byName = new Map(metadata.map(field => [field.name, field.id]));
   const selection = await bitable.base.getSelection();
   const rows: Row[] = [];
-  let pageToken: number | undefined = undefined;
+  let pageToken: number | undefined;
   do {
-    const page = await table.getRecordsByPage({ pageSize: 200, pageToken, viewId: selection.viewId ?? undefined, stringValue: true });
+    const page = await table.getRecordsByPage({ pageSize: 100, pageToken, viewId: selection.viewId ?? undefined, stringValue: true });
     for (const record of page.records as any[]) {
       const values: Record<string, unknown> = {};
-      for (const name of [PHOTO, ...OPTIONAL]) if (names.has(name)) values[name] = record.fields[byId.get(name)!];
-      rows.push({ id: String(record.recordId), fields: values, original: text(values[PHOTO]) });
+      for (const name of [COVER, SOURCE, ...OPTIONAL]) if (names.has(name)) values[name] = record.fields[byName.get(name)!];
+      rows.push({ id: String(record.recordId), fields: values, cover: firstUrl(values[COVER]), source: firstUrl(values[SOURCE]) });
     }
     pageToken = page.hasMore ? page.pageToken : undefined;
   } while (pageToken !== undefined);
@@ -38,16 +39,27 @@ async function loadRows(): Promise<Row[]> {
 }
 
 function App() {
-  const [rows, setRows] = useState<Row[]>([]); const [error, setError] = useState(''); const [busy, setBusy] = useState(false); const [lightbox, setLightbox] = useState<{row: Row; index: number} | null>(null); const [dragged, setDragged] = useState<{rowId: string; index: number} | null>(null);
-  const refresh = async () => { setError(''); try { setRows(await loadRows()); } catch (e) { setError(String(e)); } };
+  const [rows, setRows] = useState<Row[]>([]);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [index, setIndex] = useState(0);
+  const refresh = async () => { setError(''); setLoading(true); try { setRows(await loadRows()); setIndex(0); } catch (err) { setError(String(err)); } finally { setLoading(false); } };
   useEffect(() => { refresh(); }, []);
-  const save = async (row: Row) => {
-    const next = (row.pending ?? urls(row.original)).join(','); setBusy(true);
-    try { const table = await bitable.base.getActiveTable(); const current = text(await table.getCellString((await table.getFieldByName(PHOTO)).id, row.id)); if (current !== row.original) throw new Error('这条记录的数据刚刚发生变化，请刷新后重新审核'); await table.setRecord(row.id, { fields: { [(await table.getFieldByName(PHOTO)).id]: next } }); setRows(rs => rs.map(r => r.id === row.id ? {...r, original: next, pending: undefined, undo: {before: row.original, after: next}} : r)); } catch (e) { setError(String(e)); } finally { setBusy(false); }
-  };
-  const undo = async (row: Row) => { if (!row.undo) return; const table = await bitable.base.getActiveTable(); const field = await table.getFieldByName(PHOTO); const current = text(await table.getCellString(field.id, row.id)); if (current !== row.undo.after) return setError('数据已发生变化，不能撤销，请刷新后重新审核'); await table.setRecord(row.id, { fields: {[field.id]: row.undo.before} }); setRows(rs => rs.map(r => r.id === row.id ? {...r, original: row.undo!.before, undo: undefined} : r)); };
-  const remove = (row: Row, index: number) => setRows(rs => rs.map(r => r.id === row.id ? {...r, pending: (r.pending ?? urls(r.original)).filter((_, j) => j !== index)} : r));
-  const reorder = (row: Row, from: number, to: number) => setRows(rs => rs.map(r => { if (r.id !== row.id || from === to) return r; const next = [...(r.pending ?? urls(r.original))]; const [item] = next.splice(from, 1); next.splice(to, 0, item); return {...r, pending: next}; }));
-  return <main><header><div><h1>朋友圈图片审核</h1><p>原图 URL 预览 · 可拖动排序 · 只写回「{PHOTO}」</p></div><button onClick={refresh}>刷新</button></header>{error && <div className="error">{error}</div>}<div className="notice">可以拖动图片调整顺序，也可以标记移除。点击“保存本条”后才会写回；每次写回前都会按 recordId 重新校验原值。</div><section>{rows.map(row => { const list = row.pending ?? urls(row.original); return <article key={row.id}><div className="meta"><span>{text(row.fields['编号']) || row.id}</span><b>{text(row.fields['推广品类-AI']) || '未填写品类'}</b></div><p className="copy">{text(row.fields['追评文案-AI'])}</p>{list.length ? <div className="photos">{list.map((url, i) => <div className="photo" key={url + i} draggable={!busy} onDragStart={() => setDragged({rowId: row.id, index: i})} onDragOver={e => e.preventDefault()} onDrop={() => { if (dragged?.rowId === row.id) reorder(row, dragged.index, i); setDragged(null); }}><div className="photo-index">图片 {i + 1} · 拖动调整顺序</div><img src={url} referrerPolicy="no-referrer" onClick={() => setLightbox({row, index:i})} onError={e => { const holder = e.currentTarget.parentElement as HTMLElement; holder.innerHTML = `<div class="failed">图片加载失败<br/><a href="${url}" target="_blank" rel="noreferrer">打开原图</a><small>可能是原图地址过期或源站禁止插件窗口加载</small></div>`; }} /><button disabled={busy} onClick={() => remove(row, i)}>从下发中移除</button></div>)}</div> : <div className="empty">无图片</div>}{row.pending && <div className="actions"><button className="primary" disabled={busy} onClick={() => save(row)}>保存本条</button><button disabled={busy} onClick={() => setRows(rs => rs.map(r => r.id === row.id ? {...r, pending: undefined} : r))}>取消</button></div>}{row.undo && <button className="undo" disabled={busy} onClick={() => undo(row)}>撤销上次更新</button>}</article>})}</section>{lightbox && <div className="overlay" onClick={() => setLightbox(null)}><img src={(lightbox.row.pending ?? urls(lightbox.row.original))[lightbox.index]} referrerPolicy="no-referrer" /></div>}</main>;
+  const current = rows[index];
+  return <main>
+    <header><div><h1>素材图片 / 视频审核</h1><p>封面预览 · 视频播放 · 只读模式</p></div><button onClick={refresh} disabled={loading}>{loading ? '读取中…' : '刷新'}</button></header>
+    {error && <div className="error">{error}</div>}
+    <div className="notice">当前是只读审核，不会修改飞书表格。视频链接如果已过期，请点击“打开原始素材”。</div>
+    {!error && !loading && !current && <div className="empty">当前视图没有可审核的素材</div>}
+    {current && <><div className="progress">第 {index + 1} / {rows.length} 条</div><article>
+      <div className="meta"><b>{text(current.fields['素材标题']) || '未填写标题'}</b><span>{text(current.fields['素材类型']) || '未填写类型'}</span><span>{text(current.fields['素材品类']) || '未填写品类'}</span></div>
+      <div className="media-grid">
+        <section className="media-card"><h2>封面</h2>{current.cover ? <img className="cover" src={current.cover} referrerPolicy="no-referrer" onError={event => { event.currentTarget.style.display = 'none'; event.currentTarget.nextElementSibling?.classList.remove('hidden'); }} /> : null}<div className={`failed ${current.cover ? 'hidden' : ''}`}>封面加载失败</div>{current.cover && <a href={current.cover} target="_blank" rel="noreferrer">打开封面原图</a>}</section>
+        <section className="media-card"><h2>原始视频</h2>{current.source ? <video className="video" controls preload="metadata" poster={current.cover || undefined} onError={event => { event.currentTarget.style.display = 'none'; event.currentTarget.nextElementSibling?.classList.remove('hidden'); }} src={current.source} /> : null}<div className={`failed ${current.source ? 'hidden' : ''}`}>视频链接为空或无法播放</div>{current.source && <a href={current.source} target="_blank" rel="noreferrer">打开原始视频</a>}</section>
+      </div>
+      <div className="actions"><button disabled={index === 0} onClick={() => setIndex(value => value - 1)}>上一条</button><button disabled={index === rows.length - 1} onClick={() => setIndex(value => value + 1)}>下一条</button></div>
+      <div className="record-id">recordId：{current.id}</div>
+    </article></>}
+  </main>;
 }
 createRoot(document.getElementById('root')!).render(<App />);
