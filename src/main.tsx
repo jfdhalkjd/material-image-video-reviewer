@@ -11,11 +11,34 @@ const DESCRIPTION = '素材描述/正文';
 const OPTIONAL = ['素材标题', '素材类型', '素材品类', '发布时间', ID, DESCRIPTION];
 type Row = { id: string; fields: Record<string, unknown>; cover: string; source: string };
 
-function text(value: unknown) { return Array.isArray(value) ? value.join('、') : value == null ? '' : String(value); }
-function firstUrl(value: unknown) {
-  const raw = text(value);
-  const found = raw.match(/https?:\/\/[^\s,\])，]+/g);
-  return found?.[0] ?? raw.trim();
+function text(value: unknown): string {
+  if (value == null) return '';
+  if (Array.isArray(value)) return value.map(text).filter(Boolean).join('、');
+  if (typeof value === 'object') {
+    const item = value as Record<string, unknown>;
+    return text(item.text ?? item.name ?? item.title ?? item.value ?? item.link ?? item.url ?? item.href);
+  }
+  return String(value);
+}
+
+function firstUrl(value: unknown): string {
+  const candidates: unknown[] = [];
+  const visit = (item: unknown) => {
+    if (item == null) return;
+    if (Array.isArray(item)) return item.forEach(visit);
+    if (typeof item === 'object') {
+      const obj = item as Record<string, unknown>;
+      ['link', 'url', 'href', 'text', 'value'].forEach(key => visit(obj[key]));
+      return;
+    }
+    candidates.push(String(item));
+  };
+  visit(value);
+  for (const candidate of candidates) {
+    const found = candidate.match(/https?:\/\/[^\s,\])，]+/g);
+    if (found?.[0]) return found[0].replace(/[),.;，。；）》】]+$/, '');
+  }
+  return '';
 }
 
 async function loadRows(): Promise<Row[]> {
