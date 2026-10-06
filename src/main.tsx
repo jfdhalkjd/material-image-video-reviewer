@@ -8,13 +8,14 @@ import './edit.css';
 const COVER = '扩展信息/封面';
 // 原视频必须使用业务表里的“素材链接”，而不是旧版的“素材原始链接”。
 const SOURCE = '素材链接';
+const RAW_SOURCE = '素材原始链接';
 const ID = '业务素材ID';
 const TITLE = '视频标题/描述';
 const EDITABLE = ['素材品类', '素材类型', '内容类型'];
 const FIELD_ALIASES: Record<string, string[]> = { '素材品类': ['素材品类', '素材品类映射', '素材1素材品类映射'], '素材类型': ['素材类型'], '内容类型': ['内容类型'] };
 const OPTIONAL = [TITLE, '素材标题', '素材品类', '素材类型', '内容类型', '发布时间', ID];
 type Option = { name: string; color?: number };
-type Row = { id: string; fields: Record<string, unknown>; fieldIds: Record<string, string>; fieldNames: Record<string, string>; options: Record<string, Option[]>; cover: string; source: string };
+type Row = { id: string; fields: Record<string, unknown>; fieldIds: Record<string, string>; fieldNames: Record<string, string>; options: Record<string, Option[]>; cover: string; source: string; rawSource: string };
 
 function text(value: unknown): string {
   if (value == null) return '';
@@ -82,13 +83,13 @@ async function loadRows(): Promise<Row[]> {
     const page = await table.getRecordsByPage({ pageSize: 200, pageToken, viewId: selection.viewId ?? undefined, stringValue: true });
     for (const record of page.records as any[]) {
       const values: Record<string, unknown> = {};
-      for (const name of [COVER, SOURCE, ...OPTIONAL]) if (names.has(name)) values[name] = record.fields[byName.get(name)!];
+      for (const name of [COVER, SOURCE, RAW_SOURCE, ...OPTIONAL]) if (names.has(name)) values[name] = record.fields[byName.get(name)!];
       const canonicalValues = { ...values } as Record<string, unknown>;
       const canonicalIds: Record<string, string> = Object.fromEntries(metadata.map(field => [field.name, field.id]));
       const canonicalNames: Record<string, string> = {};
       const canonicalOptions: Record<string, Option[]> = {};
       for (const canonical of EDITABLE) { const actual = actualNames[canonical]; canonicalValues[canonical] = values[actual]; canonicalIds[canonical] = canonicalIds[actual]; canonicalNames[canonical] = actual; canonicalOptions[canonical] = optionsById[canonicalIds[canonical]] || []; }
-      rows.push({ id: String(record.recordId), fields: canonicalValues, fieldIds: canonicalIds, fieldNames: canonicalNames, options: canonicalOptions, cover: normalizeMediaUrl(values[COVER]), source: normalizeMediaUrl(values[SOURCE]) });
+      rows.push({ id: String(record.recordId), fields: canonicalValues, fieldIds: canonicalIds, fieldNames: canonicalNames, options: canonicalOptions, cover: normalizeMediaUrl(values[COVER]), source: normalizeMediaUrl(values[SOURCE]), rawSource: normalizeMediaUrl(values[RAW_SOURCE]) });
     }
     pageToken = page.hasMore ? page.pageToken : undefined;
   } while (pageToken !== undefined);
@@ -109,6 +110,8 @@ function ChoiceField({ name, value, options, onChange }: { name: string; value: 
 function MediaCard({ row, onSaved }: { row: Row; onSaved: () => void }) {
   const [coverFailed, setCoverFailed] = useState(false);
   const [videoFailed, setVideoFailed] = useState(false);
+  const [playbackSource, setPlaybackSource] = useState(row.source);
+  const [usingRawSource, setUsingRawSource] = useState(false);
   const [videoError, setVideoError] = useState('');
   const [zoomed, setZoomed] = useState(false);
   const [videoShape, setVideoShape] = useState<'portrait' | 'landscape' | 'square'>('landscape');
@@ -119,6 +122,13 @@ function MediaCard({ row, onSaved }: { row: Row; onSaved: () => void }) {
   const dirty = EDITABLE.some(name => draft[name] !== original[name]);
   const save = async () => { setSaving(true); setSaveError(''); try { const table = await bitable.base.getActiveTable(); const values: Record<string, unknown> = {}; for (const name of EDITABLE) if (row.fieldIds[name]) values[row.fieldIds[name]] = draft[name] || null; await table.setRecord(row.id, values); onSaved(); } catch (error) { setSaveError(String(error)); } finally { setSaving(false); } };
   const handleVideoError = (event: React.SyntheticEvent<HTMLVideoElement>) => {
+    if (!usingRawSource && row.rawSource && row.rawSource !== row.source) {
+      setUsingRawSource(true);
+      setPlaybackSource(row.rawSource);
+      setVideoFailed(false);
+      setVideoError('');
+      return;
+    }
     const mediaError = event.currentTarget.error;
     setVideoError(mediaError ? `播放器错误码：${mediaError.code}` : '浏览器未返回具体错误');
     setVideoFailed(true);
@@ -129,7 +139,7 @@ function MediaCard({ row, onSaved }: { row: Row; onSaved: () => void }) {
     <div className="edit-fields">{EDITABLE.map(name => <ChoiceField key={name} name={row.fieldNames[name] || name} value={draft[name] || ''} options={row.options[name] || []} onChange={value => setDraft(current => ({ ...current, [name]: value }))} />)}{dirty && <div className="edit-actions"><button type="button" onClick={() => setDraft(original)}>返回</button><button type="button" className="save" disabled={saving} onClick={save}>{saving ? '保存中…' : '保存'}</button></div>}{saveError && <div className="save-error">保存失败：{saveError}</div>}</div>
     <div className="media-grid">
       <section className="media-card"><h2>封面</h2>{row.cover && !coverFailed ? <img className="cover" loading="lazy" src={row.cover} referrerPolicy="no-referrer" onError={() => setCoverFailed(true)} /> : <div className="failed">封面加载失败</div>}{row.cover && <a href={row.cover} target="_blank" rel="noreferrer">打开封面原图</a>}</section>
-      <section className="media-card"><div className="media-title"><h2>素材视频</h2>{row.source && <button className="zoom-button" type="button" title="放大查看视频" aria-label="放大查看视频" onClick={() => setZoomed(value => !value)}>⌕</button>}</div>{row.source && !videoFailed ? <div className={`video-shell ${videoShape}${zoomed ? ' zoomed' : ''}`}><video key={row.source} className="video" controls playsInline preload="metadata" poster={row.cover || undefined} src={row.source} onLoadedMetadata={event => { const ratio = event.currentTarget.videoWidth / event.currentTarget.videoHeight; setVideoShape(ratio > 1.15 ? 'landscape' : ratio < .87 ? 'portrait' : 'square'); }} onError={handleVideoError} />{zoomed && <button className="modal-close" type="button" aria-label="关闭放大预览" onClick={() => setZoomed(false)}>×</button>}</div> : <div className="failed">视频链接可能已过期或无法播放{videoError && <><br />{videoError}</>}{row.source && <><br /><small>{row.source}</small></>}</div>}{row.source && <a href={row.source} target="_blank" rel="noreferrer">打开素材视频</a>}</section>
+      <section className="media-card"><div className="media-title"><h2>素材视频</h2>{row.source && <button className="zoom-button" type="button" title="放大查看视频" aria-label="放大查看视频" onClick={() => setZoomed(value => !value)}>⌕</button>}</div>{row.source && !videoFailed ? <div className={`video-shell ${videoShape}${zoomed ? ' zoomed' : ''}`}><video key={playbackSource} className="video" controls playsInline preload="metadata" poster={row.cover || undefined} src={playbackSource} onLoadedMetadata={event => { const ratio = event.currentTarget.videoWidth / event.currentTarget.videoHeight; setVideoShape(ratio > 1.15 ? 'landscape' : ratio < .87 ? 'portrait' : 'square'); }} onError={handleVideoError} />{zoomed && <button className="modal-close" type="button" aria-label="关闭放大预览" onClick={() => setZoomed(false)}>×</button>}</div> : <div className="failed">视频链接可能已过期或无法播放{videoError && <><br />{videoError}</>}{row.source && <><br /><small>{usingRawSource ? row.rawSource : row.source}</small></>}</div>}{row.source && <a href={usingRawSource ? row.rawSource : row.source} target="_blank" rel="noreferrer">打开素材视频</a>}</section>
     </div>
     <div className="record-id">recordId：{row.id}</div>
   </article>;
