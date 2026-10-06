@@ -52,7 +52,7 @@ async function loadRows(): Promise<Row[]> {
   const metadata = await Promise.all(fields.map(async (field: any) => ({ id: field.id, name: await field.getName() })));
   const actualNames: Record<string, string> = {};
   for (const canonical of EDITABLE) { actualNames[canonical] = canonical; for (const candidate of (FIELD_ALIASES[canonical] || [])) { if (metadata.some(field => field.name === candidate)) { actualNames[canonical] = candidate; break; } } }
-  const metaList = typeof (table as any).getFieldMetaList === 'function' ? await (table as any).getFieldMetaList() : [];
+  const metaList = await Promise.all(fields.map(async (field: any) => { try { return await field.getMeta(); } catch { return null; } }));
   const options: Record<string, Option[]> = {};
   for (const meta of (Array.isArray(metaList) ? metaList : []) as any[]) options[meta.name] = (meta.property?.options || []).map((option: any) => ({ name: option.name, color: option.color })).filter((option: Option) => option.name);
   const names = new Set(metadata.map(field => field.name));
