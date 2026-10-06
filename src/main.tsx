@@ -107,6 +107,8 @@ function ChoiceField({ name, value, options, onChange }: { name: string; value: 
   const safeOptions = Array.isArray(options) ? options : [];
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [rangeStart, setRangeStart] = useState('');
+  const [rangeEnd, setRangeEnd] = useState('');
   let current: Option | undefined; for (const option of safeOptions) { if (option.name === value) { current = option; break; } }
   const filtered = safeOptions.filter(option => option.name.toLowerCase().includes(query.trim().toLowerCase()));
   return <label className="choice-field">{name}<div className="choice-control" onClick={() => setOpen(true)}>{current ? <span className="choice-pill" style={{ background: colorFor(current) }}>{current.name}</span> : <span className="choice-empty">未选择</span>}{value && <button type="button" className="choice-clear" onClick={event => { event.stopPropagation(); onChange(''); }}>×</button>}<span className="choice-arrow">▾</span></div>{open && <div className="choice-menu"><input autoFocus value={query} onChange={event => setQuery(event.target.value)} placeholder="搜索选项" />{filtered.map(option => <button type="button" key={option.name} onClick={() => { onChange(option.name); setOpen(false); setQuery(''); }}><span className="choice-dot" style={{ background: colorFor(option) }} />{option.name}</button>)}{!filtered.length && <span className="choice-none">没有匹配选项</span>}<button type="button" className="choice-close" onClick={() => setOpen(false)}>关闭</button></div>}</label>;
@@ -166,18 +168,30 @@ function App() {
   const [pageSize, setPageSize] = useState(6);
   const refresh = async () => { setError(''); setLoading(true); try { setRows(await loadRows()); setPage(1); } catch (err) { setError(String(err)); } finally { setLoading(false); } };
   useEffect(() => { refresh(); }, []);
-  const filtered = useMemo(() => { const key = query.trim().toLowerCase(); if (!key) return rows; return rows.filter(row => `${text(row.fields[ID])}\n${text(row.fields[TITLE])}`.toLowerCase().includes(key)); }, [rows, query]);
+  const filtered = useMemo(() => {
+    const key = query.trim().toLowerCase();
+    const start = rangeStart === '' ? 1 : Math.max(1, Number(rangeStart));
+    const end = rangeEnd === '' ? Number.POSITIVE_INFINITY : Math.max(start, Number(rangeEnd));
+    return rows.filter(row => {
+      const matchesRange = row.index >= start && row.index <= end;
+      const matchesText = !key || `${text(row.fields[ID])}\n${text(row.fields[TITLE])}`.toLowerCase().includes(key);
+      return matchesRange && matchesText;
+    });
+  }, [rows, query, rangeStart, rangeEnd]);
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const visible = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   return <main>
-    <header><div><h1>素材图片 / 视频审核</h1><p>封面预览 · 视频播放 · 搜索审核 · 字段编辑版</p></div><button onClick={refresh} disabled={loading}>{loading ? '读取中…' : '刷新'}</button></header>
-    {error && <div className="error">{error}</div>}
-    <div className="notice">只加载文字和链接；图片按当前页懒加载，视频点击播放时才请求，不会一次打开上千个视频。</div>
-    <div className="toolbar"><input value={query} onChange={event => { setQuery(event.target.value); setPage(1); }} placeholder="搜索业务素材ID或视频标题/描述" /><label>每页 <select value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setPage(1); }}><option value="10">10 条</option><option value="50">50 条</option><option value="100">100 条</option><option value="200">200 条</option></select></label><span>共 {filtered.length} 条</span></div>
-    {!loading && !error && !visible.length && <div className="empty">没有匹配的素材</div>}
-    <section className="cards">{visible.map(row => <MediaCard key={row.id} row={row} onSaved={refresh} />)}</section>
-    {visible.length > 0 && <div className="pagination"><button disabled={currentPage <= 1} onClick={() => setPage(value => value - 1)}>上一页</button><span>第 {currentPage} / {totalPages} 页</span><button disabled={currentPage >= totalPages} onClick={() => setPage(value => value + 1)}>下一页</button></div>}
+    <section className="top-panel">
+      <header><div><h1>素材图片 / 视频审核</h1><p>封面预览 · 视频播放 · 搜索审核 · 字段编辑版</p></div><button onClick={refresh} disabled={loading}>{loading ? '读取中…' : '刷新'}</button></header>
+      {error && <div className="error">{error}</div>}
+      <div className="toolbar"><input value={query} onChange={event => { setQuery(event.target.value); setPage(1); }} placeholder="搜索业务素材ID或视频标题/描述" /><label className="range-label">序号 <input className="range-input" inputMode="numeric" value={rangeStart} onChange={event => { setRangeStart(event.target.value.replace(/\D/g, '')); setPage(1); }} placeholder="从" /> <span>—</span> <input className="range-input" inputMode="numeric" value={rangeEnd} onChange={event => { setRangeEnd(event.target.value.replace(/\D/g, '')); setPage(1); }} placeholder="到" /></label><label>每页 <select value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setPage(1); }}><option value="10">10 条</option><option value="50">50 条</option><option value="100">100 条</option><option value="200">200 条</option></select></label><span>共 {filtered.length} 条</span></div>
+    </section>
+    <section className="cards-scroll">
+      {!loading && !error && !visible.length && <div className="empty">没有匹配的素材</div>}
+      <section className="cards">{visible.map(row => <MediaCard key={row.id} row={row} onSaved={refresh} />)}</section>
+      {visible.length > 0 && <div className="pagination"><button disabled={currentPage <= 1} onClick={() => setPage(value => value - 1)}>上一页</button><span>第 {currentPage} / {totalPages} 页</span><button disabled={currentPage >= totalPages} onClick={() => setPage(value => value + 1)}>下一页</button></div>}
+    </section>
   </main>;
 }
 createRoot(document.getElementById('root')!).render(<App />);
