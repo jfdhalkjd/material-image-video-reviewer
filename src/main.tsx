@@ -8,8 +8,8 @@ const COVER = '扩展信息/封面';
 // 原视频必须使用业务表里的“素材链接”，而不是旧版的“素材原始链接”。
 const SOURCE = '素材链接';
 const ID = '业务素材ID';
-const DESCRIPTION = '素材描述/正文';
-const OPTIONAL = ['素材标题', '素材类型', '素材品类', '发布时间', ID, DESCRIPTION];
+const TITLE = '视频标题/描述';
+const OPTIONAL = [TITLE, '素材标题', '素材类型', '素材品类', '发布时间', ID];
 type Row = { id: string; fields: Record<string, unknown>; cover: string; source: string };
 
 function text(value: unknown): string {
@@ -78,8 +78,7 @@ function MediaCard({ row }: { row: Row }) {
   };
   return <article className="card">
     <div className="card-head"><strong>{text(row.fields[ID]) || '无业务素材ID'}</strong><span>{text(row.fields['素材类型']) || '未填写类型'}</span><span>{text(row.fields['素材品类']) || '未填写品类'}</span></div>
-    <div className="title">{text(row.fields['素材标题']) || '未填写标题'}</div>
-    <div className="description">{text(row.fields[DESCRIPTION]) || '未填写素材描述/正文'}</div>
+    <div className="title">{text(row.fields[TITLE]) || '未填写视频标题/描述'}</div>
     <div className="media-grid">
       <section className="media-card"><h2>封面</h2>{row.cover && !coverFailed ? <img className="cover" loading="lazy" src={row.cover} referrerPolicy="no-referrer" onError={() => setCoverFailed(true)} /> : <div className="failed">封面加载失败</div>}{row.cover && <a href={row.cover} target="_blank" rel="noreferrer">打开封面原图</a>}</section>
       <section className="media-card"><div className="media-title"><h2>素材视频</h2>{row.source && <button className="zoom-button" type="button" title="放大查看视频" aria-label="放大查看视频" onClick={() => setZoomed(value => !value)}>⌕</button>}</div>{row.source && !videoFailed ? <div className={`video-shell ${videoShape}${zoomed ? ' zoomed' : ''}`}>{zoomed && <button className="modal-close" type="button" aria-label="关闭放大预览" onClick={() => setZoomed(false)}>×</button>}<video className="video" controls preload="none" poster={row.cover || undefined} src={row.source} onLoadedMetadata={event => { const ratio = event.currentTarget.videoWidth / event.currentTarget.videoHeight; setVideoShape(ratio > 1.15 ? 'landscape' : ratio < .87 ? 'portrait' : 'square'); }} onError={handleVideoError} /></div> : <div className="failed">视频链接可能已过期或无法播放{videoError && <><br />{videoError}</>}{row.source && <><br /><small>{row.source}</small></>}</div>}{row.source && <a href={row.source} target="_blank" rel="noreferrer">打开素材视频</a>}</section>
@@ -97,7 +96,7 @@ function App() {
   const [pageSize, setPageSize] = useState(6);
   const refresh = async () => { setError(''); setLoading(true); try { setRows(await loadRows()); setPage(1); } catch (err) { setError(String(err)); } finally { setLoading(false); } };
   useEffect(() => { refresh(); }, []);
-  const filtered = useMemo(() => { const key = query.trim().toLowerCase(); if (!key) return rows; return rows.filter(row => `${text(row.fields[ID])}\n${text(row.fields[DESCRIPTION])}`.toLowerCase().includes(key)); }, [rows, query]);
+  const filtered = useMemo(() => { const key = query.trim().toLowerCase(); if (!key) return rows; return rows.filter(row => `${text(row.fields[ID])}\n${text(row.fields[TITLE])}`.toLowerCase().includes(key)); }, [rows, query]);
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const visible = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -105,7 +104,7 @@ function App() {
     <header><div><h1>素材图片 / 视频审核</h1><p>封面预览 · 视频播放 · 搜索审核 · 只读模式</p></div><button onClick={refresh} disabled={loading}>{loading ? '读取中…' : '刷新'}</button></header>
     {error && <div className="error">{error}</div>}
     <div className="notice">只加载文字和链接；图片按当前页懒加载，视频点击播放时才请求，不会一次打开上千个视频。</div>
-    <div className="toolbar"><input value={query} onChange={event => { setQuery(event.target.value); setPage(1); }} placeholder="搜索业务素材ID或素材描述/正文" /><label>每页 <select value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setPage(1); }}><option value="6">6 条</option><option value="12">12 条</option><option value="24">24 条</option></select></label><span>共 {filtered.length} 条</span></div>
+    <div className="toolbar"><input value={query} onChange={event => { setQuery(event.target.value); setPage(1); }} placeholder="搜索业务素材ID或视频标题/描述" /><label>每页 <select value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setPage(1); }}><option value="6">6 条</option><option value="12">12 条</option><option value="24">24 条</option></select></label><span>共 {filtered.length} 条</span></div>
     {!loading && !error && !visible.length && <div className="empty">没有匹配的素材</div>}
     <section className="cards">{visible.map(row => <MediaCard key={row.id} row={row} />)}</section>
     {visible.length > 0 && <div className="pagination"><button disabled={currentPage <= 1} onClick={() => setPage(value => value - 1)}>上一页</button><span>第 {currentPage} / {totalPages} 页</span><button disabled={currentPage >= totalPages} onClick={() => setPage(value => value + 1)}>下一页</button></div>}
