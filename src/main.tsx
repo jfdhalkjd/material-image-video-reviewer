@@ -67,13 +67,19 @@ async function loadRows(): Promise<Row[]> {
 function MediaCard({ row }: { row: Row }) {
   const [coverFailed, setCoverFailed] = useState(false);
   const [videoFailed, setVideoFailed] = useState(false);
+  const [videoError, setVideoError] = useState('');
+  const handleVideoError = (event: React.SyntheticEvent<HTMLVideoElement>) => {
+    const mediaError = event.currentTarget.error;
+    setVideoError(mediaError ? `播放器错误码：${mediaError.code}` : '浏览器未返回具体错误');
+    setVideoFailed(true);
+  };
   return <article className="card">
     <div className="card-head"><strong>{text(row.fields[ID]) || '无业务素材ID'}</strong><span>{text(row.fields['素材类型']) || '未填写类型'}</span><span>{text(row.fields['素材品类']) || '未填写品类'}</span></div>
     <div className="title">{text(row.fields['素材标题']) || '未填写标题'}</div>
     <div className="description">{text(row.fields[DESCRIPTION]) || '未填写素材描述/正文'}</div>
     <div className="media-grid">
       <section className="media-card"><h2>封面</h2>{row.cover && !coverFailed ? <img className="cover" loading="lazy" src={row.cover} referrerPolicy="no-referrer" onError={() => setCoverFailed(true)} /> : <div className="failed">封面加载失败</div>}{row.cover && <a href={row.cover} target="_blank" rel="noreferrer">打开封面原图</a>}</section>
-      <section className="media-card"><h2>素材视频</h2>{row.source && !videoFailed ? <video className="video" controls preload="none" poster={row.cover || undefined} src={row.source} onError={() => setVideoFailed(true)} /> : <div className="failed">视频链接可能已过期或无法播放</div>}{row.source && <a href={row.source} target="_blank" rel="noreferrer">打开素材视频</a>}</section>
+      <section className="media-card"><h2>素材视频</h2>{row.source && !videoFailed ? <video className="video" controls preload="none" poster={row.cover || undefined} src={row.source} onError={handleVideoError} /> : <div className="failed">视频链接可能已过期或无法播放{videoError && <><br />{videoError}</>}{row.source && <><br /><small>{row.source}</small></>}</div>}{row.source && <a href={row.source} target="_blank" rel="noreferrer">打开素材视频</a>}</section>
     </div>
     <div className="record-id">recordId：{row.id}</div>
   </article>;
