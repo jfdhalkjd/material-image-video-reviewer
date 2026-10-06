@@ -32,6 +32,8 @@ jobs:
           # 给飞书侧边栏一个全新的路径，绕过旧 iframe 缓存；后续更新仍固定使用此路径。
           mkdir -p /tmp/pages/v2
           cp -R dist/. /tmp/pages/v2/
+          mkdir -p /tmp/pages/v3
+          cp -R dist/. /tmp/pages/v3/
           cd /tmp/pages
           git init
           git checkout -b gh-pages

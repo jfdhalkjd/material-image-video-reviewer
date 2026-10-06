@@ -118,7 +118,7 @@ function App() {
   const currentPage = Math.min(page, totalPages);
   const visible = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   return <main>
-    <header><div><h1>素材图片 / 视频审核</h1><p>封面预览 · 视频播放 · 搜索审核 · 只读模式</p></div><button onClick={refresh} disabled={loading}>{loading ? '读取中…' : '刷新'}</button></header>
+    <header><div><h1>素材图片 / 视频审核</h1><p>封面预览 · 视频播放 · 搜索审核 · 字段编辑版</p></div><button onClick={refresh} disabled={loading}>{loading ? '读取中…' : '刷新'}</button></header>
     {error && <div className="error">{error}</div>}
     <div className="notice">只加载文字和链接；图片按当前页懒加载，视频点击播放时才请求，不会一次打开上千个视频。</div>
     <div className="toolbar"><input value={query} onChange={event => { setQuery(event.target.value); setPage(1); }} placeholder="搜索业务素材ID或视频标题/描述" /><label>每页 <select value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setPage(1); }}><option value="6">6 条</option><option value="12">12 条</option><option value="24">24 条</option></select></label><span>共 {filtered.length} 条</span></div>
