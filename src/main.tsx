@@ -14,7 +14,7 @@ const EDITABLE = ['素材品类', '素材类型', '内容类型'];
 const FIELD_ALIASES: Record<string, string[]> = { '素材品类': ['素材品类', '素材品类映射', '素材1素材品类映射'], '素材类型': ['素材类型'], '内容类型': ['内容类型'] };
 const OPTIONAL = [TITLE, '素材标题', '素材品类', '素材类型', '内容类型', '发布时间', ID];
 type Option = { name: string; color?: number };
-type Row = { id: string; fields: Record<string, unknown>; fieldIds: Record<string, string>; options: Record<string, Option[]>; cover: string; source: string };
+type Row = { id: string; fields: Record<string, unknown>; fieldIds: Record<string, string>; fieldNames: Record<string, string>; options: Record<string, Option[]>; cover: string; source: string };
 
 function text(value: unknown): string {
   if (value == null) return '';
@@ -53,8 +53,15 @@ async function loadRows(): Promise<Row[]> {
   const actualNames: Record<string, string> = {};
   for (const canonical of EDITABLE) { actualNames[canonical] = canonical; for (const candidate of (FIELD_ALIASES[canonical] || [])) { if (metadata.some(field => field.name === candidate)) { actualNames[canonical] = candidate; break; } } }
   const metaList = await Promise.all(fields.map(async (field: any) => { try { return await field.getMeta(); } catch { return null; } }));
-  const options: Record<string, Option[]> = {};
-  for (const meta of (Array.isArray(metaList) ? metaList : []) as any[]) options[meta.name] = (meta.property?.options || []).map((option: any) => ({ name: option.name, color: option.color })).filter((option: Option) => option.name);
+  const optionsById: Record<string, Option[]> = {};
+  for (let index = 0; index < fields.length; index += 1) {
+    const meta = (Array.isArray(metaList) ? metaList[index] : null) as any;
+    const fieldId = fields[index]?.id;
+    if (!fieldId) continue;
+    optionsById[fieldId] = (meta?.property?.options || [])
+      .map((option: any) => ({ name: option.name, color: option.color }))
+      .filter((option: Option) => option.name);
+  }
   const names = new Set(metadata.map(field => field.name));
   const missing = [COVER, SOURCE].filter(name => !names.has(name));
   if (missing.length) throw new Error(`缺少必须字段：${missing.join('、')}`);
@@ -69,9 +76,10 @@ async function loadRows(): Promise<Row[]> {
       for (const name of [COVER, SOURCE, ...OPTIONAL]) if (names.has(name)) values[name] = record.fields[byName.get(name)!];
       const canonicalValues = { ...values } as Record<string, unknown>;
       const canonicalIds: Record<string, string> = Object.fromEntries(metadata.map(field => [field.name, field.id]));
+      const canonicalNames: Record<string, string> = {};
       const canonicalOptions: Record<string, Option[]> = {};
-      for (const canonical of EDITABLE) { const actual = actualNames[canonical]; canonicalValues[canonical] = values[actual]; canonicalIds[canonical] = canonicalIds[actual]; canonicalOptions[canonical] = options[actual] || []; }
-      rows.push({ id: String(record.recordId), fields: canonicalValues, fieldIds: canonicalIds, options: canonicalOptions, cover: firstUrl(values[COVER]), source: firstUrl(values[SOURCE]) });
+      for (const canonical of EDITABLE) { const actual = actualNames[canonical]; canonicalValues[canonical] = values[actual]; canonicalIds[canonical] = canonicalIds[actual]; canonicalNames[canonical] = actual; canonicalOptions[canonical] = optionsById[canonicalIds[canonical]] || []; }
+      rows.push({ id: String(record.recordId), fields: canonicalValues, fieldIds: canonicalIds, fieldNames: canonicalNames, options: canonicalOptions, cover: firstUrl(values[COVER]), source: firstUrl(values[SOURCE]) });
     }
     pageToken = page.hasMore ? page.pageToken : undefined;
   } while (pageToken !== undefined);
@@ -109,7 +117,7 @@ function MediaCard({ row, onSaved }: { row: Row; onSaved: () => void }) {
   return <article className="card">
     <div className="card-head"><strong>{text(row.fields[ID]) || '无业务素材ID'}</strong><span>{text(row.fields['素材类型']) || '未填写类型'}</span><span>{text(row.fields['素材品类']) || '未填写品类'}</span></div>
     <div className="title">{text(row.fields[TITLE]) || '未填写视频标题/描述'}</div>
-    <div className="edit-fields">{EDITABLE.map(name => <ChoiceField key={name} name={name} value={draft[name] || ''} options={row.options[name] || []} onChange={value => setDraft(current => ({ ...current, [name]: value }))} />)}{dirty && <div className="edit-actions"><button type="button" onClick={() => setDraft(original)}>返回</button><button type="button" className="save" disabled={saving} onClick={save}>{saving ? '保存中…' : '保存'}</button></div>}{saveError && <div className="save-error">保存失败：{saveError}</div>}</div>
+    <div className="edit-fields">{EDITABLE.map(name => <ChoiceField key={name} name={row.fieldNames[name] || name} value={draft[name] || ''} options={row.options[name] || []} onChange={value => setDraft(current => ({ ...current, [name]: value }))} />)}{dirty && <div className="edit-actions"><button type="button" onClick={() => setDraft(original)}>返回</button><button type="button" className="save" disabled={saving} onClick={save}>{saving ? '保存中…' : '保存'}</button></div>}{saveError && <div className="save-error">保存失败：{saveError}</div>}</div>
     <div className="media-grid">
       <section className="media-card"><h2>封面</h2>{row.cover && !coverFailed ? <img className="cover" loading="lazy" src={row.cover} referrerPolicy="no-referrer" onError={() => setCoverFailed(true)} /> : <div className="failed">封面加载失败</div>}{row.cover && <a href={row.cover} target="_blank" rel="noreferrer">打开封面原图</a>}</section>
       <section className="media-card"><div className="media-title"><h2>素材视频</h2>{row.source && <button className="zoom-button" type="button" title="放大查看视频" aria-label="放大查看视频" onClick={() => setZoomed(value => !value)}>⌕</button>}</div>{row.source && !videoFailed ? <div className={`video-shell ${videoShape}${zoomed ? ' zoomed' : ''}`}>{zoomed && <button className="modal-close" type="button" aria-label="关闭放大预览" onClick={() => setZoomed(false)}>×</button>}<video className="video" controls preload="none" poster={row.cover || undefined} src={row.source} onLoadedMetadata={event => { const ratio = event.currentTarget.videoWidth / event.currentTarget.videoHeight; setVideoShape(ratio > 1.15 ? 'landscape' : ratio < .87 ? 'portrait' : 'square'); }} onError={handleVideoError} /></div> : <div className="failed">视频链接可能已过期或无法播放{videoError && <><br />{videoError}</>}{row.source && <><br /><small>{row.source}</small></>}</div>}{row.source && <a href={row.source} target="_blank" rel="noreferrer">打开素材视频</a>}</section>
