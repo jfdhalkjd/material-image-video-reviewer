@@ -12,7 +12,7 @@ const ID = '业务素材ID';
 const TITLE = '视频标题/描述';
 const EDITABLE = ['素材品类映射', '素材类型', '内容类型'];
 const FIELD_ALIASES: Record<string, string[]> = { '素材品类': ['素材品类', '素材品类映射', '素材1素材品类映射'], '素材类型': ['素材类型'], '内容类型': ['内容类型'] };
-const OPTIONAL = [TITLE, '素材标题', '素材类型', '素材品类', '发布时间', ID];
+const OPTIONAL = [TITLE, '素材标题', '素材品类', '素材类型', '内容类型', '发布时间', ID];
 type Option = { name: string; color?: number };
 type Row = { id: string; fields: Record<string, unknown>; fieldIds: Record<string, string>; options: Record<string, Option[]>; cover: string; source: string };
 
@@ -135,7 +135,7 @@ function App() {
     <header><div><h1>素材图片 / 视频审核</h1><p>封面预览 · 视频播放 · 搜索审核 · 字段编辑版</p></div><button onClick={refresh} disabled={loading}>{loading ? '读取中…' : '刷新'}</button></header>
     {error && <div className="error">{error}</div>}
     <div className="notice">只加载文字和链接；图片按当前页懒加载，视频点击播放时才请求，不会一次打开上千个视频。</div>
-    <div className="toolbar"><input value={query} onChange={event => { setQuery(event.target.value); setPage(1); }} placeholder="搜索业务素材ID或视频标题/描述" /><label>每页 <select value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setPage(1); }}><option value="6">6 条</option><option value="12">12 条</option><option value="24">24 条</option></select></label><span>共 {filtered.length} 条</span></div>
+    <div className="toolbar"><input value={query} onChange={event => { setQuery(event.target.value); setPage(1); }} placeholder="搜索业务素材ID或视频标题/描述" /><label>每页 <select value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setPage(1); }}><option value="10">10 条</option><option value="50">50 条</option><option value="100">100 条</option><option value="200">200 条</option></select></label><span>共 {filtered.length} 条</span></div>
     {!loading && !error && !visible.length && <div className="empty">没有匹配的素材</div>}
     <section className="cards">{visible.map(row => <MediaCard key={row.id} row={row} onSaved={refresh} />)}</section>
     {visible.length > 0 && <div className="pagination"><button disabled={currentPage <= 1} onClick={() => setPage(value => value - 1)}>上一页</button><span>第 {currentPage} / {totalPages} 页</span><button disabled={currentPage >= totalPages} onClick={() => setPage(value => value + 1)}>下一页</button></div>}
