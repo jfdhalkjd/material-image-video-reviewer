@@ -5,7 +5,9 @@ import './style.css';
 import './modal.css';
 import './edit.css';
 
-const COVER = '扩展信息/封面';
+// The Base currently names this field “封面图片”; older views used
+// “扩展信息/封面”. Accept both names so the plugin remains compatible.
+const COVER_CANDIDATES = ['封面图片', '扩展信息/封面'];
 // 原视频必须使用业务表里的“素材链接”，而不是旧版的“素材原始链接”。
 const SOURCE = '素材链接';
 const RAW_SOURCE = '素材原始链接';
@@ -73,7 +75,8 @@ async function loadRows(): Promise<Row[]> {
       .filter((option: Option) => option.name);
   }
   const names = new Set(metadata.map(field => field.name));
-  const missing = [COVER, SOURCE].filter(name => !names.has(name));
+  const coverName = COVER_CANDIDATES.find(name => names.has(name));
+  const missing = [coverName ? '' : '封面图片（或扩展信息/封面）', SOURCE].filter(Boolean);
   if (missing.length) throw new Error(`缺少必须字段：${missing.join('、')}`);
   const byName = new Map(metadata.map(field => [field.name, field.id]));
   const selection = await bitable.base.getSelection();
@@ -83,13 +86,13 @@ async function loadRows(): Promise<Row[]> {
     const page = await table.getRecordsByPage({ pageSize: 200, pageToken, viewId: selection.viewId ?? undefined, stringValue: true });
     for (const record of page.records as any[]) {
       const values: Record<string, unknown> = {};
-      for (const name of [COVER, SOURCE, RAW_SOURCE, ...OPTIONAL]) if (names.has(name)) values[name] = record.fields[byName.get(name)!];
+      for (const name of [coverName!, SOURCE, RAW_SOURCE, ...OPTIONAL]) if (names.has(name)) values[name] = record.fields[byName.get(name)!];
       const canonicalValues = { ...values } as Record<string, unknown>;
       const canonicalIds: Record<string, string> = Object.fromEntries(metadata.map(field => [field.name, field.id]));
       const canonicalNames: Record<string, string> = {};
       const canonicalOptions: Record<string, Option[]> = {};
       for (const canonical of EDITABLE) { const actual = actualNames[canonical]; canonicalValues[canonical] = values[actual]; canonicalIds[canonical] = canonicalIds[actual]; canonicalNames[canonical] = actual; canonicalOptions[canonical] = optionsById[canonicalIds[canonical]] || []; }
-      rows.push({ id: String(record.recordId), fields: canonicalValues, fieldIds: canonicalIds, fieldNames: canonicalNames, options: canonicalOptions, cover: normalizeMediaUrl(values[COVER]), source: normalizeMediaUrl(values[SOURCE]), rawSource: normalizeMediaUrl(values[RAW_SOURCE]) });
+      rows.push({ id: String(record.recordId), fields: canonicalValues, fieldIds: canonicalIds, fieldNames: canonicalNames, options: canonicalOptions, cover: normalizeMediaUrl(values[coverName!]), source: normalizeMediaUrl(values[SOURCE]), rawSource: normalizeMediaUrl(values[RAW_SOURCE]) });
     }
     pageToken = page.hasMore ? page.pageToken : undefined;
   } while (pageToken !== undefined);
