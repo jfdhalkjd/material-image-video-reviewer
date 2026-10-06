@@ -17,7 +17,7 @@ const EDITABLE = ['素材品类', '素材类型', '内容类型'];
 const FIELD_ALIASES: Record<string, string[]> = { '素材品类': ['素材品类', '素材品类映射', '素材1素材品类映射'], '素材类型': ['素材类型'], '内容类型': ['内容类型'] };
 const OPTIONAL = [TITLE, '素材标题', '素材品类', '素材类型', '内容类型', '发布时间', ID];
 type Option = { name: string; color?: number };
-type Row = { id: string; fields: Record<string, unknown>; fieldIds: Record<string, string>; fieldNames: Record<string, string>; options: Record<string, Option[]>; cover: string; source: string; rawSource: string };
+type Row = { index: number; id: string; fields: Record<string, unknown>; fieldIds: Record<string, string>; fieldNames: Record<string, string>; options: Record<string, Option[]>; cover: string; source: string; rawSource: string };
 
 function text(value: unknown): string {
   if (value == null) return '';
@@ -94,7 +94,7 @@ async function loadRows(): Promise<Row[]> {
       const canonicalNames: Record<string, string> = {};
       const canonicalOptions: Record<string, Option[]> = {};
       for (const canonical of EDITABLE) { const actual = actualNames[canonical]; canonicalValues[canonical] = values[actual]; canonicalIds[canonical] = canonicalIds[actual]; canonicalNames[canonical] = actual; canonicalOptions[canonical] = optionsById[canonicalIds[canonical]] || []; }
-      rows.push({ id: String(record.recordId), fields: canonicalValues, fieldIds: canonicalIds, fieldNames: canonicalNames, options: canonicalOptions, cover: normalizeMediaUrl(coverName ? values[coverName] : ''), source: normalizeMediaUrl(values[SOURCE]), rawSource: normalizeMediaUrl(values[RAW_SOURCE]) });
+      rows.push({ index: rows.length + 1, id: String(record.recordId), fields: canonicalValues, fieldIds: canonicalIds, fieldNames: canonicalNames, options: canonicalOptions, cover: normalizeMediaUrl(coverName ? values[coverName] : ''), source: normalizeMediaUrl(values[SOURCE]), rawSource: normalizeMediaUrl(values[RAW_SOURCE]) });
     }
     pageToken = page.hasMore ? page.pageToken : undefined;
   } while (pageToken !== undefined);
@@ -146,7 +146,7 @@ function MediaCard({ row, onSaved }: { row: Row; onSaved: () => void }) {
     setVideoFailed(true);
   };
   return <article className="card">
-    <div className="card-head"><strong>{text(row.fields[ID]) || '无业务素材ID'}</strong><span>{text(row.fields['素材类型']) || '未填写类型'}</span><span>{text(row.fields['素材品类']) || '未填写品类'}</span></div>
+    <div className="card-head"><strong><span className="row-index">{row.index}</span>{text(row.fields[ID]) || '无业务素材ID'}</strong><span>{text(row.fields['素材类型']) || '未填写类型'}</span><span>{text(row.fields['素材品类']) || '未填写品类'}</span></div>
     <div className="title">{text(row.fields[TITLE]) || '未填写视频标题/描述'}</div>
     <div className="edit-fields">{EDITABLE.map(name => <ChoiceField key={name} name={row.fieldNames[name] || name} value={draft[name] || ''} options={row.options[name] || []} onChange={value => setDraft(current => ({ ...current, [name]: value }))} />)}{dirty && <div className="edit-actions"><button type="button" onClick={() => setDraft(original)}>返回</button><button type="button" className="save" disabled={saving} onClick={save}>{saving ? '保存中…' : '保存'}</button></div>}{saveError && <div className="save-error">保存失败：{saveError}</div>}</div>
     <div className="media-grid">
