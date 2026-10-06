@@ -51,7 +51,7 @@ async function loadRows(): Promise<Row[]> {
   const fields = await table.getFieldList();
   const metadata = await Promise.all(fields.map(async (field: any) => ({ id: field.id, name: await field.getName() })));
   const actualNames: Record<string, string> = {};
-  for (const canonical of EDITABLE) actualNames[canonical] = FIELD_ALIASES[canonical].find(name => metadata.some(field => field.name === name)) || canonical;
+  for (const canonical of EDITABLE) actualNames[canonical] = (FIELD_ALIASES[canonical] || []).find(name => metadata.some(field => field.name === name)) || canonical;
   const metaList = await table.getFieldMetaList();
   const options: Record<string, Option[]> = {};
   for (const meta of metaList as any[]) options[meta.name] = (meta.property?.options || []).map((option: any) => ({ name: option.name, color: option.color })).filter((option: Option) => option.name);
@@ -81,10 +81,11 @@ async function loadRows(): Promise<Row[]> {
 const OPTION_COLORS = ['#5b8ff9','#61dDAa','#65789b','#f6bd16','#7262fd','#78d3f8','#9661bc','#f6903d','#008685','#f08bb4'];
 function colorFor(option?: Option) { return OPTION_COLORS[(option?.color || 0) % OPTION_COLORS.length]; }
 function ChoiceField({ name, value, options, onChange }: { name: string; value: string; options: Option[]; onChange: (value: string) => void }) {
+  const safeOptions = Array.isArray(options) ? options : [];
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const current = options.find(option => option.name === value);
-  const filtered = options.filter(option => option.name.toLowerCase().includes(query.trim().toLowerCase()));
+  const current = safeOptions.find(option => option.name === value);
+  const filtered = safeOptions.filter(option => option.name.toLowerCase().includes(query.trim().toLowerCase()));
   return <label className="choice-field">{name}<div className="choice-control" onClick={() => setOpen(true)}>{current ? <span className="choice-pill" style={{ background: colorFor(current) }}>{current.name}</span> : <span className="choice-empty">未选择</span>}{value && <button type="button" className="choice-clear" onClick={event => { event.stopPropagation(); onChange(''); }}>×</button>}<span className="choice-arrow">▾</span></div>{open && <div className="choice-menu"><input autoFocus value={query} onChange={event => setQuery(event.target.value)} placeholder="搜索选项" />{filtered.map(option => <button type="button" key={option.name} onClick={() => { onChange(option.name); setOpen(false); setQuery(''); }}><span className="choice-dot" style={{ background: colorFor(option) }} />{option.name}</button>)}{!filtered.length && <span className="choice-none">没有匹配选项</span>}<button type="button" className="choice-close" onClick={() => setOpen(false)}>关闭</button></div>}</label>;
 }
 
