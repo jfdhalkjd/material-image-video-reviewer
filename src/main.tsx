@@ -76,7 +76,9 @@ async function loadRows(): Promise<Row[]> {
   }
   const names = new Set(metadata.map(field => field.name));
   const coverName = COVER_CANDIDATES.find(name => names.has(name));
-  const missing = [coverName ? '' : '封面图片（或扩展信息/封面）', SOURCE].filter(Boolean);
+  // A missing cover must not block video review: some views intentionally
+  // hide the cover field. The MP4 source is the only required field.
+  const missing = [SOURCE].filter(name => !names.has(name));
   if (missing.length) throw new Error(`缺少必须字段：${missing.join('、')}`);
   const byName = new Map(metadata.map(field => [field.name, field.id]));
   const selection = await bitable.base.getSelection();
@@ -86,13 +88,13 @@ async function loadRows(): Promise<Row[]> {
     const page = await table.getRecordsByPage({ pageSize: 200, pageToken, viewId: selection.viewId ?? undefined, stringValue: true });
     for (const record of page.records as any[]) {
       const values: Record<string, unknown> = {};
-      for (const name of [coverName!, SOURCE, RAW_SOURCE, ...OPTIONAL]) if (names.has(name)) values[name] = record.fields[byName.get(name)!];
+      for (const name of [coverName, SOURCE, RAW_SOURCE, ...OPTIONAL]) if (name && names.has(name)) values[name] = record.fields[byName.get(name)!];
       const canonicalValues = { ...values } as Record<string, unknown>;
       const canonicalIds: Record<string, string> = Object.fromEntries(metadata.map(field => [field.name, field.id]));
       const canonicalNames: Record<string, string> = {};
       const canonicalOptions: Record<string, Option[]> = {};
       for (const canonical of EDITABLE) { const actual = actualNames[canonical]; canonicalValues[canonical] = values[actual]; canonicalIds[canonical] = canonicalIds[actual]; canonicalNames[canonical] = actual; canonicalOptions[canonical] = optionsById[canonicalIds[canonical]] || []; }
-      rows.push({ id: String(record.recordId), fields: canonicalValues, fieldIds: canonicalIds, fieldNames: canonicalNames, options: canonicalOptions, cover: normalizeMediaUrl(values[coverName!]), source: normalizeMediaUrl(values[SOURCE]), rawSource: normalizeMediaUrl(values[RAW_SOURCE]) });
+      rows.push({ id: String(record.recordId), fields: canonicalValues, fieldIds: canonicalIds, fieldNames: canonicalNames, options: canonicalOptions, cover: normalizeMediaUrl(coverName ? values[coverName] : ''), source: normalizeMediaUrl(values[SOURCE]), rawSource: normalizeMediaUrl(values[RAW_SOURCE]) });
     }
     pageToken = page.hasMore ? page.pageToken : undefined;
   } while (pageToken !== undefined);
