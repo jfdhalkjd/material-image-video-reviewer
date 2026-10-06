@@ -40,6 +40,8 @@ jobs:
           cp -R dist/. /tmp/pages/v5/
           mkdir -p /tmp/pages/v6
           cp -R dist/. /tmp/pages/v6/
+          mkdir -p /tmp/pages/v7
+          cp -R dist/. /tmp/pages/v7/
           cd /tmp/pages
           git init
           git checkout -b gh-pages
