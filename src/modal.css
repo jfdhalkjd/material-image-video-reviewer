@@ -4,5 +4,5 @@
 .video-shell.zoomed.portrait { width: min(480px, 42vw); height: min(700px, 76vh); }
 .video-shell.zoomed.square { width: min(600px, 55vw); height: min(600px, 68vh); }
 .video-shell.zoomed .video { width: 100%; height: 100%; background: #000; border-radius: 6px; object-fit: contain; }
-.modal-close { position: absolute; top: -12px; right: -12px; width: 30px; height: 30px; border: 1px solid #d0d5dd; border-radius: 50%; background: #fff; color: #333; font-size: 22px; line-height: 26px; cursor: pointer; z-index: 1; }
+.modal-close { position: absolute; top: 18px; right: 18px; width: 30px; height: 30px; border: 1px solid #d0d5dd; border-radius: 50%; background: rgba(255,255,255,.96); color: #333; font-size: 22px; line-height: 26px; cursor: pointer; z-index: 3; }
 @media (max-width: 900px) { .video-shell.zoomed { right: 14px; min-width: 280px; min-height: 200px; max-width: calc(100vw - 28px); max-height: 82vh; } .video-shell.zoomed.landscape,.video-shell.zoomed.portrait,.video-shell.zoomed.square { width: calc(100vw - 28px); height: min(72vh, 620px); } }
