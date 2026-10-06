@@ -52,9 +52,9 @@ async function loadRows(): Promise<Row[]> {
   const metadata = await Promise.all(fields.map(async (field: any) => ({ id: field.id, name: await field.getName() })));
   const actualNames: Record<string, string> = {};
   for (const canonical of EDITABLE) actualNames[canonical] = (FIELD_ALIASES[canonical] || []).find(name => metadata.some(field => field.name === name)) || canonical;
-  const metaList = await table.getFieldMetaList();
+  const metaList = typeof (table as any).getFieldMetaList === 'function' ? await (table as any).getFieldMetaList() : [];
   const options: Record<string, Option[]> = {};
-  for (const meta of metaList as any[]) options[meta.name] = (meta.property?.options || []).map((option: any) => ({ name: option.name, color: option.color })).filter((option: Option) => option.name);
+  for (const meta of (Array.isArray(metaList) ? metaList : []) as any[]) options[meta.name] = (meta.property?.options || []).map((option: any) => ({ name: option.name, color: option.color })).filter((option: Option) => option.name);
   const names = new Set(metadata.map(field => field.name));
   const missing = [COVER, SOURCE].filter(name => !names.has(name));
   if (missing.length) throw new Error(`缺少必须字段：${missing.join('、')}`);
