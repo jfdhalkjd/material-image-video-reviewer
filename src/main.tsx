@@ -68,6 +68,7 @@ function MediaCard({ row }: { row: Row }) {
   const [coverFailed, setCoverFailed] = useState(false);
   const [videoFailed, setVideoFailed] = useState(false);
   const [videoError, setVideoError] = useState('');
+  const [zoomed, setZoomed] = useState(false);
   const handleVideoError = (event: React.SyntheticEvent<HTMLVideoElement>) => {
     const mediaError = event.currentTarget.error;
     setVideoError(mediaError ? `播放器错误码：${mediaError.code}` : '浏览器未返回具体错误');
@@ -79,7 +80,7 @@ function MediaCard({ row }: { row: Row }) {
     <div className="description">{text(row.fields[DESCRIPTION]) || '未填写素材描述/正文'}</div>
     <div className="media-grid">
       <section className="media-card"><h2>封面</h2>{row.cover && !coverFailed ? <img className="cover" loading="lazy" src={row.cover} referrerPolicy="no-referrer" onError={() => setCoverFailed(true)} /> : <div className="failed">封面加载失败</div>}{row.cover && <a href={row.cover} target="_blank" rel="noreferrer">打开封面原图</a>}</section>
-      <section className="media-card"><h2>素材视频</h2>{row.source && !videoFailed ? <video className="video" controls preload="none" poster={row.cover || undefined} src={row.source} onError={handleVideoError} /> : <div className="failed">视频链接可能已过期或无法播放{videoError && <><br />{videoError}</>}{row.source && <><br /><small>{row.source}</small></>}</div>}{row.source && <a href={row.source} target="_blank" rel="noreferrer">打开素材视频</a>}</section>
+      <section className="media-card"><div className="media-title"><h2>素材视频</h2>{row.source && <button className="zoom-button" type="button" title="放大查看视频" aria-label="放大查看视频" onClick={() => setZoomed(true)}>⌕</button>}</div>{row.source && !videoFailed ? <video className="video" controls preload="none" poster={row.cover || undefined} src={row.source} onError={handleVideoError} /> : <div className="failed">视频链接可能已过期或无法播放{videoError && <><br />{videoError}</>}{row.source && <><br /><small>{row.source}</small></>}</div>}{row.source && <a href={row.source} target="_blank" rel="noreferrer">打开素材视频</a>}{zoomed && <div className="video-modal" role="dialog" aria-modal="true" onClick={() => setZoomed(false)}><div className="video-modal-inner" onClick={event => event.stopPropagation()}><button className="modal-close" type="button" aria-label="关闭" onClick={() => setZoomed(false)}>×</button><video className="video-large" controls preload="none" poster={row.cover || undefined} src={row.source} onError={handleVideoError} /></div></div>}</section>
     </div>
     <div className="record-id">recordId：{row.id}</div>
   </article>;
