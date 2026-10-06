@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { bitable } from '@lark-base-open/js-sdk';
 import './style.css';
+import './modal.css';
 
 const COVER = '扩展信息/封面';
 // 原视频必须使用业务表里的“素材链接”，而不是旧版的“素材原始链接”。
