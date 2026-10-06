@@ -110,8 +110,8 @@ function ChoiceField({ name, value, options, onChange }: { name: string; value: 
 function MediaCard({ row, onSaved }: { row: Row; onSaved: () => void }) {
   const [coverFailed, setCoverFailed] = useState(false);
   const [videoFailed, setVideoFailed] = useState(false);
-  const [playbackSource, setPlaybackSource] = useState(row.source);
-  const [usingRawSource, setUsingRawSource] = useState(false);
+  const [playbackSource, setPlaybackSource] = useState(row.rawSource || row.source);
+  const [usingRawSource, setUsingRawSource] = useState(Boolean(row.rawSource));
   const [videoError, setVideoError] = useState('');
   const [zoomed, setZoomed] = useState(false);
   const [videoShape, setVideoShape] = useState<'portrait' | 'landscape' | 'square'>('landscape');
@@ -122,9 +122,9 @@ function MediaCard({ row, onSaved }: { row: Row; onSaved: () => void }) {
   const dirty = EDITABLE.some(name => draft[name] !== original[name]);
   const save = async () => { setSaving(true); setSaveError(''); try { const table = await bitable.base.getActiveTable(); const values: Record<string, unknown> = {}; for (const name of EDITABLE) if (row.fieldIds[name]) values[row.fieldIds[name]] = draft[name] || null; await table.setRecord(row.id, values); onSaved(); } catch (error) { setSaveError(String(error)); } finally { setSaving(false); } };
   const handleVideoError = (event: React.SyntheticEvent<HTMLVideoElement>) => {
-    if (!usingRawSource && row.rawSource && row.rawSource !== row.source) {
-      setUsingRawSource(true);
-      setPlaybackSource(row.rawSource);
+    if (usingRawSource && row.source && row.source !== row.rawSource) {
+      setUsingRawSource(false);
+      setPlaybackSource(row.source);
       setVideoFailed(false);
       setVideoError('');
       return;
