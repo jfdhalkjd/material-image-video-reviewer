@@ -4,7 +4,8 @@ import { bitable } from '@lark-base-open/js-sdk';
 import './style.css';
 
 const COVER = '扩展信息/封面';
-const SOURCE = '素材原始链接';
+// 原视频必须使用业务表里的“素材链接”，而不是旧版的“素材原始链接”。
+const SOURCE = '素材链接';
 const ID = '业务素材ID';
 const DESCRIPTION = '素材描述/正文';
 const OPTIONAL = ['素材标题', '素材类型', '素材品类', '发布时间', ID, DESCRIPTION];
@@ -49,7 +50,7 @@ function MediaCard({ row }: { row: Row }) {
     <div className="description">{text(row.fields[DESCRIPTION]) || '未填写素材描述/正文'}</div>
     <div className="media-grid">
       <section className="media-card"><h2>封面</h2>{row.cover && !coverFailed ? <img className="cover" loading="lazy" src={row.cover} referrerPolicy="no-referrer" onError={() => setCoverFailed(true)} /> : <div className="failed">封面加载失败</div>}{row.cover && <a href={row.cover} target="_blank" rel="noreferrer">打开封面原图</a>}</section>
-      <section className="media-card"><h2>原始视频</h2>{row.source && !videoFailed ? <video className="video" controls preload="none" poster={row.cover || undefined} src={row.source} onError={() => setVideoFailed(true)} /> : <div className="failed">视频链接可能已过期或无法播放</div>}{row.source && <a href={row.source} target="_blank" rel="noreferrer">打开原始视频</a>}</section>
+      <section className="media-card"><h2>素材视频</h2>{row.source && !videoFailed ? <video className="video" controls preload="none" poster={row.cover || undefined} src={row.source} onError={() => setVideoFailed(true)} /> : <div className="failed">视频链接可能已过期或无法播放</div>}{row.source && <a href={row.source} target="_blank" rel="noreferrer">打开素材视频</a>}</section>
     </div>
     <div className="record-id">recordId：{row.id}</div>
   </article>;
