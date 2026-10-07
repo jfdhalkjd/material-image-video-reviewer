@@ -1,0 +1,7 @@
+.cards{grid-template-columns:1fr}
+.media-grid{grid-template-columns:1fr 1.2fr 1fr 1fr;align-items:start}
+.edit-fields{grid-template-columns:repeat(5,minmax(0,1fr))}
+.text-control{width:100%;min-height:32px;border:1px solid #d0d5dd;border-radius:6px;padding:6px 8px;background:#fff;color:#172033;box-sizing:border-box}
+.transcript-box{min-height:220px;max-height:420px;overflow:auto;white-space:pre-wrap;color:#344054;background:#f8fafc;border-radius:6px;padding:10px;line-height:1.65}
+@media(max-width:1200px){.media-grid{grid-template-columns:1fr 1fr}.edit-fields{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:600px){.media-grid{grid-template-columns:1fr}.edit-fields{grid-template-columns:1fr 1fr}}

@@ -4,6 +4,7 @@ import { bitable } from '@lark-base-open/js-sdk';
 import './style.css';
 import './modal.css';
 import './edit.css';
+import './override.css';
 
 // The Base currently names this field “封面图片”; older views used
 // “扩展信息/封面”. Accept both names so the plugin remains compatible.
@@ -13,11 +14,12 @@ const SOURCE = '素材链接';
 const RAW_SOURCE = '素材原始链接';
 const ID = '业务素材ID';
 const TITLE = '视频标题/描述';
-const EDITABLE = ['素材品类', '素材类型', '内容类型'];
+const EDITABLE = ['素材品类', '素材类型', '内容类型', '素材状态'];
+const TEXT_EDITABLE = ['出镜人物'];
 const FIELD_ALIASES: Record<string, string[]> = { '素材品类': ['素材品类', '素材品类映射', '素材1素材品类映射'], '素材类型': ['素材类型'], '内容类型': ['内容类型'] };
-const OPTIONAL = [TITLE, '素材标题', '素材品类', '素材类型', '内容类型', '发布时间', ID];
+const OPTIONAL = [TITLE, '素材标题', '素材品类', '素材类型', '内容类型', '素材状态', '出镜人物', '视频逐字稿', '视频切片描述', '发布时间', ID];
 type Option = { name: string; color?: number };
-type Row = { index: number; id: string; fields: Record<string, unknown>; fieldIds: Record<string, string>; fieldNames: Record<string, string>; options: Record<string, Option[]>; cover: string; source: string; rawSource: string };
+type Row = { index: number; id: string; fields: Record<string, unknown>; fieldIds: Record<string, string>; fieldNames: Record<string, string>; fieldMultiple: Record<string, boolean>; options: Record<string, Option[]>; cover: string; source: string; rawSource: string };
 
 function text(value: unknown): string {
   if (value == null) return '';
@@ -63,7 +65,7 @@ async function loadRows(): Promise<Row[]> {
   const fields = await table.getFieldList();
   const metadata = await Promise.all(fields.map(async (field: any) => ({ id: field.id, name: await field.getName() })));
   const actualNames: Record<string, string> = {};
-  for (const canonical of EDITABLE) { actualNames[canonical] = canonical; for (const candidate of (FIELD_ALIASES[canonical] || [])) { if (metadata.some(field => field.name === candidate)) { actualNames[canonical] = candidate; break; } } }
+  for (const canonical of [...EDITABLE, ...TEXT_EDITABLE]) { actualNames[canonical] = canonical; for (const candidate of (FIELD_ALIASES[canonical] || [])) { if (metadata.some(field => field.name === candidate)) { actualNames[canonical] = candidate; break; } } }
   const metaList = await Promise.all(fields.map(async (field: any) => { try { return await field.getMeta(); } catch { return null; } }));
   const optionsById: Record<string, Option[]> = {};
   for (let index = 0; index < fields.length; index += 1) {
@@ -93,8 +95,9 @@ async function loadRows(): Promise<Row[]> {
       const canonicalIds: Record<string, string> = Object.fromEntries(metadata.map(field => [field.name, field.id]));
       const canonicalNames: Record<string, string> = {};
       const canonicalOptions: Record<string, Option[]> = {};
-      for (const canonical of EDITABLE) { const actual = actualNames[canonical]; canonicalValues[canonical] = values[actual]; canonicalIds[canonical] = canonicalIds[actual]; canonicalNames[canonical] = actual; canonicalOptions[canonical] = optionsById[canonicalIds[canonical]] || []; }
-      rows.push({ index: rows.length + 1, id: String(record.recordId), fields: canonicalValues, fieldIds: canonicalIds, fieldNames: canonicalNames, options: canonicalOptions, cover: normalizeMediaUrl(coverName ? values[coverName] : ''), source: normalizeMediaUrl(values[SOURCE]), rawSource: normalizeMediaUrl(values[RAW_SOURCE]) });
+      const fieldMultiple: Record<string, boolean> = {};
+      for (const canonical of [...EDITABLE, ...TEXT_EDITABLE]) { const actual = actualNames[canonical]; canonicalValues[canonical] = values[actual]; canonicalIds[canonical] = canonicalIds[actual]; canonicalNames[canonical] = actual; fieldMultiple[canonical] = Boolean(fields.find((field: any) => field.id === canonicalIds[canonical])?.multiple); canonicalOptions[canonical] = optionsById[canonicalIds[canonical]] || []; }
+      rows.push({ index: rows.length + 1, id: String(record.recordId), fields: canonicalValues, fieldIds: canonicalIds, fieldNames: canonicalNames, fieldMultiple, options: canonicalOptions, cover: normalizeMediaUrl(coverName ? values[coverName] : ''), source: normalizeMediaUrl(values[SOURCE]), rawSource: normalizeMediaUrl(values[RAW_SOURCE]) });
     }
     pageToken = page.hasMore ? page.pageToken : undefined;
   } while (pageToken !== undefined);
@@ -112,6 +115,10 @@ function ChoiceField({ name, value, options, onChange }: { name: string; value: 
   return <label className="choice-field">{name}<div className="choice-control" onClick={() => setOpen(true)}>{current ? <span className="choice-pill" style={{ background: colorFor(current) }}>{current.name}</span> : <span className="choice-empty">未选择</span>}{value && <button type="button" className="choice-clear" onClick={event => { event.stopPropagation(); onChange(''); }}>×</button>}<span className="choice-arrow">▾</span></div>{open && <div className="choice-menu"><input autoFocus value={query} onChange={event => setQuery(event.target.value)} placeholder="搜索选项" />{filtered.map(option => <button type="button" key={option.name} onClick={() => { onChange(option.name); setOpen(false); setQuery(''); }}><span className="choice-dot" style={{ background: colorFor(option) }} />{option.name}</button>)}{!filtered.length && <span className="choice-none">没有匹配选项</span>}<button type="button" className="choice-close" onClick={() => setOpen(false)}>关闭</button></div>}</label>;
 }
 
+function TextField({ name, value, onChange }: { name: string; value: string; onChange: (value: string) => void }) {
+  return <label className="choice-field text-field">{name}<input className="text-control" value={value} onChange={event => onChange(event.target.value)} placeholder="手动填写" /></label>;
+}
+
 function MediaCard({ row, onSaved }: { row: Row; onSaved: () => void }) {
   const [coverFailed, setCoverFailed] = useState(false);
   const [videoFailed, setVideoFailed] = useState(false);
@@ -121,12 +128,12 @@ function MediaCard({ row, onSaved }: { row: Row; onSaved: () => void }) {
   const [videoError, setVideoError] = useState('');
   const [zoomed, setZoomed] = useState(false);
   const [videoShape, setVideoShape] = useState<'portrait' | 'landscape' | 'square'>('landscape');
-  const [draft, setDraft] = useState<Record<string, string>>(() => Object.fromEntries(EDITABLE.map(name => [name, text(row.fields[name])] )));
+  const [draft, setDraft] = useState<Record<string, string>>(() => Object.fromEntries([...EDITABLE, ...TEXT_EDITABLE].map(name => [name, text(row.fields[name])] )));
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
-  const original = Object.fromEntries(EDITABLE.map(name => [name, text(row.fields[name])] ));
-  const dirty = EDITABLE.some(name => draft[name] !== original[name]);
-  const save = async () => { setSaving(true); setSaveError(''); try { const table = await bitable.base.getActiveTable(); const values: Record<string, unknown> = {}; for (const name of EDITABLE) if (row.fieldIds[name]) values[row.fieldIds[name]] = draft[name] || null; await table.setRecord(row.id, values); onSaved(); } catch (error) { setSaveError(String(error)); } finally { setSaving(false); } };
+  const original = Object.fromEntries([...EDITABLE, ...TEXT_EDITABLE].map(name => [name, text(row.fields[name])] ));
+  const dirty = [...EDITABLE, ...TEXT_EDITABLE].some(name => draft[name] !== original[name]);
+  const save = async () => { setSaving(true); setSaveError(''); try { const table = await bitable.base.getActiveTable(); const values: Record<string, unknown> = {}; for (const name of [...EDITABLE, ...TEXT_EDITABLE]) if (row.fieldIds[name]) values[row.fieldIds[name]] = draft[name] ? (row.fieldMultiple[name] ? [draft[name]] : draft[name]) : null; await table.setRecord(row.id, values); onSaved(); } catch (error) { setSaveError(String(error)); } finally { setSaving(false); } };
   const handleVideoError = (event: React.SyntheticEvent<HTMLVideoElement>) => {
     if (usingRawSource && row.source && row.source !== row.rawSource) {
       setUsingRawSource(false);
@@ -148,10 +155,12 @@ function MediaCard({ row, onSaved }: { row: Row; onSaved: () => void }) {
   return <article className="card">
     <div className="card-head"><strong><span className="row-index">{row.index}</span>{text(row.fields[ID]) || '无业务素材ID'}</strong><span>{text(row.fields['素材类型']) || '未填写类型'}</span><span>{text(row.fields['素材品类']) || '未填写品类'}</span></div>
     <div className="title">{text(row.fields[TITLE]) || '未填写视频标题/描述'}</div>
-    <div className="edit-fields">{EDITABLE.map(name => <ChoiceField key={name} name={row.fieldNames[name] || name} value={draft[name] || ''} options={row.options[name] || []} onChange={value => setDraft(current => ({ ...current, [name]: value }))} />)}{dirty && <div className="edit-actions"><button type="button" onClick={() => setDraft(original)}>返回</button><button type="button" className="save" disabled={saving} onClick={save}>{saving ? '保存中…' : '保存'}</button></div>}{saveError && <div className="save-error">保存失败：{saveError}</div>}</div>
+    <div className="edit-fields">{EDITABLE.map(name => <ChoiceField key={name} name={row.fieldNames[name] || name} value={draft[name] || ''} options={row.options[name] || []} onChange={value => setDraft(current => ({ ...current, [name]: value }))} />)}<TextField name={row.fieldNames['出镜人物'] || '出镜人物'} value={draft['出镜人物'] || ''} onChange={value => setDraft(current => ({ ...current, '出镜人物': value }))} />{dirty && <div className="edit-actions"><button type="button" onClick={() => setDraft(original)}>返回</button><button type="button" className="save" disabled={saving} onClick={save}>{saving ? '保存中…' : '保存'}</button></div>}{saveError && <div className="save-error">保存失败：{saveError}</div>}</div>
     <div className="media-grid">
       <section className="media-card"><h2>封面</h2>{row.cover && !coverFailed ? <img className="cover" loading="lazy" src={row.cover} onError={() => setCoverFailed(true)} /> : <div className="failed">封面加载失败</div>}{row.cover && <a href={row.cover} target="_blank" rel="noreferrer">打开封面原图</a>}</section>
       <section className="media-card"><div className="media-title"><h2>素材视频</h2>{row.source && <button className="zoom-button" type="button" title="放大查看视频" aria-label="放大查看视频" onClick={() => setZoomed(value => !value)}>⌕</button>}</div>{row.source && !videoFailed && !embedFallback ? <div className={`video-shell ${videoShape}${zoomed ? ' zoomed' : ''}`}><video key={playbackSource} className="video" controls playsInline preload="metadata" referrerPolicy="no-referrer" poster={row.cover || undefined} src={playbackSource} onLoadedMetadata={event => { const ratio = event.currentTarget.videoWidth / event.currentTarget.videoHeight; setVideoShape(ratio > 1.15 ? 'landscape' : ratio < .87 ? 'portrait' : 'square'); }} onError={handleVideoError} />{zoomed && <button className="modal-close" type="button" aria-label="关闭放大预览" onClick={() => setZoomed(false)}>×</button>}</div> : embedFallback ? <div className={`video-shell ${videoShape}${zoomed ? ' zoomed' : ''}`}><iframe className="video video-embed-fallback" src={playbackSource} title="素材视频" referrerPolicy="no-referrer" allow="autoplay; fullscreen" />{zoomed && <button className="modal-close" type="button" aria-label="关闭放大预览" onClick={() => setZoomed(false)}>×</button>}</div> : <div className="failed">视频链接可能已过期或无法播放{videoError && <><br />{videoError}</>}{row.source && <><br /><small>{usingRawSource ? row.rawSource : row.source}</small></>}</div>}{row.source && <a href={usingRawSource ? row.rawSource : row.source} target="_blank" rel="noreferrer">打开素材视频</a>}</section>
+      <section className="media-card transcript-card"><h2>视频逐字稿</h2><div className="transcript-box">{text(row.fields['视频逐字稿']) || '暂无逐字稿'}</div></section>
+      <section className="media-card"><h2>视频切片描述</h2><div className="transcript-box">{text(row.fields['视频切片描述']) || '暂无切片描述'}</div></section>
     </div>
     <div className="record-id">recordId：{row.id}</div>
   </article>;
