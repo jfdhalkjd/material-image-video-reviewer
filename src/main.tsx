@@ -133,7 +133,7 @@ function MediaCard({ row, onSaved }: { row: Row; onSaved: () => void }) {
   const [saveError, setSaveError] = useState('');
   const original = Object.fromEntries([...EDITABLE, ...TEXT_EDITABLE].map(name => [name, text(row.fields[name])] ));
   const dirty = [...EDITABLE, ...TEXT_EDITABLE].some(name => draft[name] !== original[name]);
-  const save = async () => { setSaving(true); setSaveError(''); try { const table = await bitable.base.getActiveTable(); const values: Record<string, unknown> = {}; for (const name of [...EDITABLE, ...TEXT_EDITABLE]) if (row.fieldIds[name]) values[row.fieldIds[name]] = draft[name] ? (row.fieldMultiple[name] ? [draft[name]] : draft[name]) : null; await table.setRecord(row.id, values); await new Promise(resolve => setTimeout(resolve, 300)); onSaved(); } catch (error) { setSaveError(error instanceof Error ? error.message : String(error)); } finally { setSaving(false); } };
+  const save = async () => { setSaving(true); setSaveError(''); try { const table = await bitable.base.getActiveTable(); const values: Record<string, unknown> = {}; for (const name of [...EDITABLE, ...TEXT_EDITABLE]) if (row.fieldIds[name]) values[row.fieldIds[name]] = draft[name] ? (row.fieldMultiple[name] ? [draft[name]] : draft[name]) : null; await table.setRecord(row.id, { fields: values }); await new Promise(resolve => setTimeout(resolve, 300)); onSaved(); } catch (error) { setSaveError(error instanceof Error ? error.message : String(error)); } finally { setSaving(false); } };
   const handleVideoError = (event: React.SyntheticEvent<HTMLVideoElement>) => {
     if (usingRawSource && row.source && row.source !== row.rawSource) {
       setUsingRawSource(false);
