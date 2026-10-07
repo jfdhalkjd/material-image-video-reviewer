@@ -18,7 +18,7 @@ const EDITABLE = ['素材品类', '素材类型', '内容类型', '素材状态'
 const TEXT_EDITABLE = ['出镜人物'];
 const FIELD_ALIASES: Record<string, string[]> = { '素材品类': ['素材品类', '素材品类映射', '素材1素材品类映射'], '素材类型': ['素材类型'], '内容类型': ['内容类型'] };
 const OPTIONAL = [TITLE, '素材标题', '素材品类', '素材类型', '内容类型', '素材状态', '出镜人物', '视频逐字稿', '视频切片描述', '发布时间', ID];
-type Option = { name: string; color?: number };
+type Option = { id?: string; name: string; color?: number };
 type Row = { index: number; id: string; fields: Record<string, unknown>; fieldIds: Record<string, string>; fieldNames: Record<string, string>; fieldMultiple: Record<string, boolean>; options: Record<string, Option[]>; cover: string; source: string; rawSource: string };
 
 function text(value: unknown): string {
@@ -73,7 +73,7 @@ async function loadRows(): Promise<Row[]> {
     const fieldId = fields[index]?.id;
     if (!fieldId) continue;
     optionsById[fieldId] = (meta?.property?.options || [])
-      .map((option: any) => ({ name: option.name, color: option.color }))
+      .map((option: any) => ({ id: option.id, name: option.name, color: option.color }))
       .filter((option: Option) => option.name);
   }
   const names = new Set(metadata.map(field => field.name));
@@ -133,7 +133,7 @@ function MediaCard({ row, onSaved }: { row: Row; onSaved: () => void }) {
   const [saveError, setSaveError] = useState('');
   const original = Object.fromEntries([...EDITABLE, ...TEXT_EDITABLE].map(name => [name, text(row.fields[name])] ));
   const dirty = [...EDITABLE, ...TEXT_EDITABLE].some(name => draft[name] !== original[name]);
-  const save = async () => { setSaving(true); setSaveError(''); try { const table = await bitable.base.getActiveTable(); const values: Record<string, unknown> = {}; for (const name of [...EDITABLE, ...TEXT_EDITABLE]) if (row.fieldIds[name]) { const value = draft[name] || ''; values[row.fieldIds[name]] = EDITABLE.includes(name) ? (value ? [value] : null) : (value || null); } await table.setRecord(row.id, { fields: values }); await new Promise(resolve => setTimeout(resolve, 300)); onSaved(); } catch (error) { setSaveError(error instanceof Error ? error.message : String(error)); } finally { setSaving(false); } };
+  const save = async () => { setSaving(true); setSaveError(''); try { const table = await bitable.base.getActiveTable(); const values: Record<string, unknown> = {}; for (const name of [...EDITABLE, ...TEXT_EDITABLE]) if (row.fieldIds[name]) { const value = draft[name] || ''; if (EDITABLE.includes(name)) { const option = (row.options[name] || []).find(item => item.name === value); const selected = value && option ? { id: option.id, text: option.name } : null; values[row.fieldIds[name]] = selected ? (row.fieldMultiple[name] ? [selected] : selected) : null; } else values[row.fieldIds[name]] = value || null; } await table.setRecord(row.id, { fields: values }); await new Promise(resolve => setTimeout(resolve, 300)); onSaved(); } catch (error) { setSaveError(error instanceof Error ? error.message : String(error)); } finally { setSaving(false); } };
   const handleVideoError = (event: React.SyntheticEvent<HTMLVideoElement>) => {
     if (usingRawSource && row.source && row.source !== row.rawSource) {
       setUsingRawSource(false);
