@@ -96,7 +96,7 @@ async function loadRows(): Promise<Row[]> {
       const canonicalNames: Record<string, string> = {};
       const canonicalOptions: Record<string, Option[]> = {};
       const fieldMultiple: Record<string, boolean> = {};
-      for (const canonical of [...EDITABLE, ...TEXT_EDITABLE]) { const actual = actualNames[canonical]; canonicalValues[canonical] = values[actual]; canonicalIds[canonical] = canonicalIds[actual]; canonicalNames[canonical] = actual; fieldMultiple[canonical] = Boolean(fields.find((field: any) => field.id === canonicalIds[canonical])?.multiple); canonicalOptions[canonical] = optionsById[canonicalIds[canonical]] || []; }
+      for (const canonical of [...EDITABLE, ...TEXT_EDITABLE]) { const actual = actualNames[canonical]; canonicalValues[canonical] = values[actual]; canonicalIds[canonical] = canonicalIds[actual]; canonicalNames[canonical] = actual; const fieldIndex = fields.findIndex((field: any) => field.id === canonicalIds[canonical]); const fieldMeta = fieldIndex >= 0 ? (metaList[fieldIndex] as any) : null; fieldMultiple[canonical] = Boolean(fieldMeta?.property?.multiple ?? fieldMeta?.multiple ?? fields[fieldIndex]?.multiple); canonicalOptions[canonical] = optionsById[canonicalIds[canonical]] || []; }
       rows.push({ index: rows.length + 1, id: String(record.recordId), fields: canonicalValues, fieldIds: canonicalIds, fieldNames: canonicalNames, fieldMultiple, options: canonicalOptions, cover: normalizeMediaUrl(coverName ? values[coverName] : ''), source: normalizeMediaUrl(values[SOURCE]), rawSource: normalizeMediaUrl(values[RAW_SOURCE]) });
     }
     pageToken = page.hasMore ? page.pageToken : undefined;
@@ -133,7 +133,7 @@ function MediaCard({ row, onSaved }: { row: Row; onSaved: () => void }) {
   const [saveError, setSaveError] = useState('');
   const original = Object.fromEntries([...EDITABLE, ...TEXT_EDITABLE].map(name => [name, text(row.fields[name])] ));
   const dirty = [...EDITABLE, ...TEXT_EDITABLE].some(name => draft[name] !== original[name]);
-  const save = async () => { setSaving(true); setSaveError(''); try { const table = await bitable.base.getActiveTable(); const values: Record<string, unknown> = {}; for (const name of [...EDITABLE, ...TEXT_EDITABLE]) if (row.fieldIds[name]) values[row.fieldIds[name]] = draft[name] ? (row.fieldMultiple[name] ? [draft[name]] : draft[name]) : null; await table.setRecord(row.id, values); onSaved(); } catch (error) { setSaveError(String(error)); } finally { setSaving(false); } };
+  const save = async () => { setSaving(true); setSaveError(''); try { const table = await bitable.base.getActiveTable(); const values: Record<string, unknown> = {}; for (const name of [...EDITABLE, ...TEXT_EDITABLE]) if (row.fieldIds[name]) values[row.fieldIds[name]] = draft[name] ? (row.fieldMultiple[name] ? [draft[name]] : draft[name]) : null; await table.setRecord(row.id, values); await new Promise(resolve => setTimeout(resolve, 300)); onSaved(); } catch (error) { setSaveError(error instanceof Error ? error.message : String(error)); } finally { setSaving(false); } };
   const handleVideoError = (event: React.SyntheticEvent<HTMLVideoElement>) => {
     if (usingRawSource && row.source && row.source !== row.rawSource) {
       setUsingRawSource(false);
